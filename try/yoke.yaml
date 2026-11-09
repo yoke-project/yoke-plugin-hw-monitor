@@ -1,0 +1,11 @@
+model: 1
+id: com.yoke.hw-monitor-try
+version: 0.1.0
+arch: x86_64
+core: ">=0.12.0"
+units:
+  hw-monitor:
+    kind: plugin
+    plugin: com.yoke.hw-monitor
+    exec: components/plugins/hw-monitor
+    digest: sha256:04f91a55f9037751b42e4214e366e777996476b35359083bde0faa04cbcda788

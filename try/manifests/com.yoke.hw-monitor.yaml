@@ -1,0 +1,15 @@
+manifest: 1
+id: com.yoke.hw-monitor
+protocol: 1
+streams:
+  - id: hw.cpu
+    tolerates_loss: true
+  - id: hw.memory
+    tolerates_loss: true
+capabilities:
+  - name: stream.hw.cpu.publish
+    governs:
+      stream: hw.cpu
+  - name: stream.hw.memory.publish
+    governs:
+      stream: hw.memory

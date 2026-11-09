@@ -1,0 +1,8 @@
+plugins:
+  - id: com.yoke.hw-monitor
+    unit: hw-monitor
+    source: ..
+    tag: null
+    arch: x86_64
+    digest: sha256:04f91a55f9037751b42e4214e366e777996476b35359083bde0faa04cbcda788
+    taken: 2026-11-09T20:59:58Z

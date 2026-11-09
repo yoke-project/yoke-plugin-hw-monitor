@@ -1,0 +1,9 @@
+plugin: 1
+id: com.yoke.hw-monitor
+language: rust
+program: hw-monitor
+manifest: plugin/com.yoke.hw-monitor.yaml
+build:
+  in: plugin/
+  run: cargo build --release --target "$YOKE_RUST_TARGET" && cp "target/$YOKE_RUST_TARGET/release/hw-monitor" "$YOKE_OUT/hw-monitor"
+architectures: [x86_64, aarch64]
