@@ -110,6 +110,8 @@ impl Acts for yoke_sdk::plugin::Unit {
 pub struct Monitor {
     active: HashSet<String>,
     prev_cpu: Vec<proc::CoreStat>,
+    /// Whether the last readings could all be made; a change is what the health says.
+    failing: bool,
 }
 
 impl Monitor {
@@ -138,17 +140,38 @@ impl Monitor {
         cpu: Option<Vec<proc::CoreStat>>,
         memory: Option<proc::MemStat>,
     ) -> Result<(), Error> {
+        // Each stream on its own: one that cannot be emitted on costs the other nothing.
+        let mut first = Ok(());
         if let Some(cur) = cpu {
             let sample = cpu_sample(&self.prev_cpu, &cur);
             self.prev_cpu = cur;
             if let (Some(sample), true) = (sample, self.is_active(CPU)) {
-                u.emit(CPU, json(&sample)).await?;
+                first = first.and(u.emit(CPU, json(&sample)).await);
             }
         }
         if let (Some(m), true) = (memory, self.is_active(MEMORY)) {
-            u.emit(MEMORY, json(&memory_sample(&m))).await?;
+            first = first.and(u.emit(MEMORY, json(&memory_sample(&m))).await);
         }
-        Ok(())
+        first
+    }
+
+    /// What the health should say after a tick whose readings went as given, where it changes: a reading
+    /// that fails is said once, and so is a recovery.
+    pub fn health(&mut self, cpu_read: bool, memory_read: bool) -> Option<(u8, String)> {
+        let failing = !(cpu_read && memory_read);
+        if failing == self.failing {
+            return None;
+        }
+        self.failing = failing;
+        if !failing {
+            return Some((0, "reading /proc again".into()));
+        }
+        let what: Vec<&str> = [(cpu_read, "/proc/stat"), (memory_read, "/proc/meminfo")]
+            .iter()
+            .filter(|(ok, _)| !ok)
+            .map(|(_, f)| *f)
+            .collect();
+        Some((50, format!("{} cannot be read", what.join(" and "))))
     }
 }
 

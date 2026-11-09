@@ -68,3 +68,48 @@ async fn only_active_streams_are_emitted_on() {
     let (_, cpu) = &rec.0.lock().unwrap()[1];
     assert_eq!(cpu["aggregate_usage_percent"], 50.0);
 }
+
+#[test]
+fn guest_time_is_not_counted_twice() {
+    // A core's line: user nice system idle iowait irq softirq steal guest guest_nice. The kernel already
+    // counts guest in user and guest_nice in nice.
+    let line = "cpu0 100 0 50 800 50 0 0 0 40 0";
+    let c = hw_monitor::proc::core_stat(line).expect("a core's line");
+    assert_eq!((c.busy_jiffies, c.idle_jiffies), (150, 850));
+}
+
+/// Fails on one stream, records the other.
+#[derive(Default)]
+struct FailsCpu(Mutex<Vec<String>>);
+
+impl Acts for FailsCpu {
+    async fn emit(&self, stream: &str, _payload: Vec<u8>) -> Result<(), Error> {
+        if stream == CPU {
+            return Err(Error::Transport("closed".into()));
+        }
+        self.0.lock().unwrap().push(stream.into());
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn a_failed_emit_costs_only_its_own_stream() {
+    let mut m = Monitor::default();
+    m.handle(&activated(CPU));
+    m.handle(&activated(MEMORY));
+    let u = FailsCpu::default();
+    let _ = m.tick(&u, Some(vec![core(0, 10, 10)]), Some(mem())).await;
+    let _ = m.tick(&u, Some(vec![core(0, 20, 20)]), Some(mem())).await;
+    assert_eq!(u.0.lock().unwrap().len(), 2, "memory was emitted on both ticks");
+}
+
+#[test]
+fn a_read_that_fails_is_said_and_one_that_recovers_too() {
+    let mut m = Monitor::default();
+    assert_eq!(m.health(true, true), None, "nothing to say while the readings are good");
+    let (grade, line) = m.health(false, true).expect("a failed read is said");
+    assert!(grade >= 50 && line.contains("/proc/stat"), "{grade} {line}");
+    assert_eq!(m.health(false, true), None, "said once, not every second");
+    assert_eq!(m.health(true, true).map(|h| h.0), Some(0), "a recovery is said");
+}
+

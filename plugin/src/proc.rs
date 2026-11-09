@@ -19,32 +19,26 @@ pub fn read_cpu_core_count() -> io::Result<usize> {
     Ok(count)
 }
 
-/// Reads per-core CPU usage since last call from /proc/stat.
+/// Reads every core's line of /proc/stat.
 pub fn read_cpu_stats() -> io::Result<Vec<CoreStat>> {
-    let file = fs::File::open("/proc/stat")?;
-    let reader = io::BufReader::new(file);
-    let mut stats = Vec::new();
-    for line in reader.lines() {
-        let line = line?;
-        // Lines like "cpu0 user nice system idle iowait irq softirq steal guest guest_nice"
-        let Some(rest) = line.strip_prefix("cpu") else { continue };
-        let Some(first_char) = rest.chars().next() else { continue };
-        if !first_char.is_ascii_digit() {
-            continue;
-        }
-        let mut parts = rest.split_whitespace();
-        let core_index: u32 = parts.next().unwrap_or("0").parse().unwrap_or(0);
-        let fields: Vec<u64> = parts
-            .map(|s| s.parse::<u64>().unwrap_or(0))
-            .collect();
-        // Fields: user nice system idle iowait irq softirq steal ...
-        let idle_jiffies = fields.get(3).copied().unwrap_or(0)
-            + fields.get(4).copied().unwrap_or(0); // idle + iowait
-        let total: u64 = fields.iter().sum();
-        let busy_jiffies = total.saturating_sub(idle_jiffies);
-        stats.push(CoreStat { core_index, busy_jiffies, idle_jiffies });
+    let content = fs::read_to_string("/proc/stat")?;
+    Ok(content.lines().filter_map(core_stat).collect())
+}
+
+/// One core's line of /proc/stat — `cpuN user nice system idle iowait irq softirq steal guest guest_nice` —
+/// or nothing for any other line. Guest time is already in user and nice, so it is not counted again.
+pub fn core_stat(line: &str) -> Option<CoreStat> {
+    let rest = line.strip_prefix("cpu")?;
+    if !rest.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
     }
-    Ok(stats)
+    let mut parts = rest.split_whitespace();
+    let core_index: u32 = parts.next()?.parse().ok()?;
+    let fields: Vec<u64> = parts.map(|s| s.parse::<u64>().unwrap_or(0)).collect();
+    let field = |i: usize| fields.get(i).copied().unwrap_or(0);
+    let idle_jiffies = field(3) + field(4);
+    let total: u64 = (0..8).map(field).sum();
+    Some(CoreStat { core_index, busy_jiffies: total.saturating_sub(idle_jiffies), idle_jiffies })
 }
 
 /// Reads RAM and swap from /proc/meminfo.

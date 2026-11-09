@@ -23,6 +23,8 @@ async fn main() {
     }
     let mut monitor = Monitor::default();
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
+    // After a suspension the missed seconds are skipped, not caught up in a burst.
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .expect("hw-monitor listens for SIGTERM");
     loop {
@@ -33,6 +35,11 @@ async fn main() {
             },
             _ = ticker.tick() => {
                 let (cpu, memory) = (proc::read_cpu_stats().ok(), proc::read_memory_stats().ok());
+                if let Some((grade, line)) = monitor.health(cpu.is_some(), memory.is_some()) {
+                    if let Err(err) = unit.health(grade, &line).await {
+                        eprintln!("hw-monitor: {err}");
+                    }
+                }
                 if let Err(err) = monitor.tick(&unit, cpu, memory).await {
                     eprintln!("hw-monitor: {err}");
                 }
