@@ -6,6 +6,13 @@ streams:
     tolerates_loss: true
   - id: hw.memory
     tolerates_loss: true
+  - id: hw.pressure
+    tolerates_loss: true
+queries:
+  - id: hw.snapshot
+occurrences:
+  - id: hw.memory.low
+  - id: hw.cpu.saturated
 capabilities:
   - name: stream.hw.cpu.publish
     governs:
@@ -13,3 +20,15 @@ capabilities:
   - name: stream.hw.memory.publish
     governs:
       stream: hw.memory
+  - name: stream.hw.pressure.publish
+    governs:
+      stream: hw.pressure
+  - name: query.hw.snapshot.answer
+    governs:
+      query: hw.snapshot
+  - name: event.hw.memory.low.report
+    governs:
+      occurrence: hw.memory.low
+  - name: event.hw.cpu.saturated.report
+    governs:
+      occurrence: hw.cpu.saturated

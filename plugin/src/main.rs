@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use hw_monitor::{Monitor, declaration, proc};
+use hw_monitor::{Config, Monitor, declaration, pressure_of, proc};
 use yoke_sdk::plugin::{Event, start};
 
 #[tokio::main]
@@ -21,8 +21,9 @@ async fn main() {
     if let Err(err) = unit.health(0, &format!("{cores} logical core(s)")).await {
         eprintln!("hw-monitor: {err}");
     }
-    let mut monitor = Monitor::default();
-    let mut ticker = tokio::time::interval(Duration::from_secs(1));
+    // The rate and the thresholds are the application's, among the unit's arguments.
+    let mut monitor = Monitor::new(Config::from_args(std::env::args().skip(1)));
+    let mut ticker = tokio::time::interval(Duration::from_millis(monitor.config().interval_ms));
     // After a suspension the missed seconds are skipped, not caught up in a burst.
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -31,6 +32,11 @@ async fn main() {
         tokio::select! {
             event = unit.next() => match event {
                 None | Some(Event::Ended(_)) => return,
+                Some(Event::Question(q)) => {
+                    if let Err(err) = monitor.ask(&unit, &q).await {
+                        eprintln!("hw-monitor: {err}");
+                    }
+                }
                 Some(event) => monitor.handle(&event),
             },
             _ = ticker.tick() => {
@@ -41,6 +47,16 @@ async fn main() {
                     }
                 }
                 if let Err(err) = monitor.tick(&unit, cpu, memory).await {
+                    eprintln!("hw-monitor: {err}");
+                }
+                let read = |p: &str| std::fs::read_to_string(p).ok();
+                let pressure = pressure_of(
+                    read("/proc/loadavg").as_deref(),
+                    read("/proc/pressure/cpu").as_deref(),
+                    read("/proc/pressure/memory").as_deref(),
+                    read("/proc/pressure/io").as_deref(),
+                );
+                if let Err(err) = monitor.tick_pressure(&unit, pressure).await {
                     eprintln!("hw-monitor: {err}");
                 }
             }
