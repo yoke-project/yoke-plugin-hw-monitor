@@ -1,6 +1,6 @@
 # hw-monitor
 
-A Yoke Plugin that publishes the host's CPU and memory, once a second, on two streams.
+A Yoke Plugin that watches the host's load: CPU, memory and pressure as streams, a snapshot, and two alarms.
 
 - Three streams, while each flows: `hw.cpu`, `hw.memory`, and `hw.pressure` — the load average and the
   kernel's pressure figures, saying `"available": false` where the kernel has none.
