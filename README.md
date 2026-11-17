@@ -8,7 +8,11 @@ A Yoke Plugin that watches the host's load: CPU, memory and pressure as streams,
 - Two occurrences: `hw.memory.low` (severity 50) and `hw.cpu.saturated` (severity 30), each once its
   threshold has held long enough, and again only after the figure has come back past it.
 
-Every sample states `schema` and `at_ms`. The application sets among the unit's arguments
+Every sample states `schema`, `at_ms` and `sequence`: the count of its stream's readings since the unit
+started, whether or not the stream flowed. **An interface that attaches late** subscribes to a stream, then
+asks `hw.snapshot`, whose readings carry theirs, and drops what the stream brings at or below them.
+
+The application sets among the unit's arguments
 `--interval-ms` (1000), `--memory-low-percent` (10), `--cpu-saturated-percent` (95) and `--for-seconds` (30).
 
 Nothing is granted by declaring it: an operator grants each `stream.*.publish`, `query.hw.snapshot.answer`

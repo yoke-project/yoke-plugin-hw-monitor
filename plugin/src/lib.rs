@@ -188,12 +188,15 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// A sample with the format and the instant every payload states.
-fn stamped(sample: &impl Serialize, at_ms: u64) -> Value {
+/// A sample with the format and the instant every payload states, and its sequence: the count of its
+/// stream's readings in this life of the unit, emitted or not. An interface that subscribes late asks for
+/// the snapshot, whose readings carry theirs, and drops what its stream brings at or below them.
+fn stamped(sample: &impl Serialize, at_ms: u64, sequence: u64) -> Value {
     let mut v = serde_json::to_value(sample).unwrap_or(Value::Null);
     if let Value::Object(m) = &mut v {
         m.insert("schema".into(), json!(SCHEMA));
         m.insert("at_ms".into(), json!(at_ms));
+        m.insert("sequence".into(), json!(sequence));
     }
     v
 }
@@ -293,6 +296,10 @@ pub struct Monitor {
     last_cpu: Option<Value>,
     last_memory: Option<Value>,
     last_pressure: Option<Value>,
+    /// Each stream's count of readings so far, in this life of the unit.
+    sequence_cpu: u64,
+    sequence_memory: u64,
+    sequence_pressure: u64,
     memory_low: Alarm,
     cpu_saturated: Alarm,
 }
@@ -323,7 +330,8 @@ impl Monitor {
 
     /// One pressure reading: kept for the snapshot, and emitted where its stream flows.
     pub async fn tick_pressure(&mut self, u: &impl Acts, sample: PressureSample) -> Result<(), Error> {
-        let v = stamped(&sample, now_ms());
+        self.sequence_pressure += 1;
+        let v = stamped(&sample, now_ms(), self.sequence_pressure);
         self.last_pressure = Some(v.clone());
         if self.is_active(PRESSURE) {
             return u.emit(PRESSURE, v.to_string().into_bytes()).await;
@@ -364,7 +372,8 @@ impl Monitor {
             let sample = cpu_sample(&self.prev_cpu, &cur);
             self.prev_cpu = cur;
             if let Some(sample) = sample {
-                let v = stamped(&sample, at);
+                self.sequence_cpu += 1;
+                let v = stamped(&sample, at, self.sequence_cpu);
                 self.last_cpu = Some(v.clone());
                 let limit = self.config.cpu_saturated_percent;
                 let usage = sample.aggregate_usage_percent;
@@ -379,7 +388,8 @@ impl Monitor {
         }
         if let Some(m) = memory {
             let sample = memory_sample(&m);
-            let v = stamped(&sample, at);
+            self.sequence_memory += 1;
+            let v = stamped(&sample, at, self.sequence_memory);
             self.last_memory = Some(v.clone());
             let available = if m.total_bytes == 0 { 100.0 } else { 100.0 * m.available_bytes as f32 / m.total_bytes as f32 };
             let limit = self.config.memory_low_percent;
