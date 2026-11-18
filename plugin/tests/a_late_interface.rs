@@ -26,7 +26,7 @@ impl Acts for Rec {
 }
 
 fn mem(available: u64) -> MemStat {
-    MemStat { total_bytes: 1000, available_bytes: available, cached_bytes: 0, swap_total_bytes: 0, swap_free_bytes: 0 }
+    MemStat { total_bytes: 1000, available_bytes: available, free_bytes: 0, buffers_bytes: 0, cached_bytes: 0, swap_total_bytes: 0, swap_free_bytes: 0 }
 }
 
 fn core(busy: u64) -> Vec<CoreStat> {
