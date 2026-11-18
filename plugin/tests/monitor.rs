@@ -22,7 +22,7 @@ fn core(i: u32, busy: u64, idle: u64) -> CoreStat {
 }
 
 fn mem() -> MemStat {
-    MemStat { total_bytes: 1000, available_bytes: 250, cached_bytes: 100, swap_total_bytes: 50, swap_free_bytes: 20 }
+    MemStat { total_bytes: 1000, available_bytes: 250, free_bytes: 150, buffers_bytes: 40, cached_bytes: 100, swap_total_bytes: 50, swap_free_bytes: 20 }
 }
 
 fn activated(stream: &str) -> Event {
@@ -47,6 +47,12 @@ fn usage_is_measured_between_two_readings() {
 fn memory_used_is_total_less_available() {
     let m = memory_sample(&mem());
     assert_eq!((m.used_bytes, m.usage_percent, m.swap_used_bytes), (750, 75.0, 30));
+}
+
+#[test]
+fn memory_carries_free_and_buffers_as_the_kernel_counts_them() {
+    let m = memory_sample(&mem());
+    assert_eq!((m.free_bytes, m.buffers_bytes, m.cached_bytes), (150, 40, 100));
 }
 
 #[tokio::test]

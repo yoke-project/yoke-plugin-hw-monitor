@@ -46,6 +46,8 @@ pub fn read_memory_stats() -> io::Result<MemStat> {
     let content = fs::read_to_string("/proc/meminfo")?;
     let mut total_bytes = 0u64;
     let mut available_bytes = 0u64;
+    let mut free_bytes = 0u64;
+    let mut buffers_bytes = 0u64;
     let mut cached_bytes = 0u64;
     let mut swap_total_bytes = 0u64;
     let mut swap_free_bytes = 0u64;
@@ -58,13 +60,15 @@ pub fn read_memory_stats() -> io::Result<MemStat> {
         match key {
             "MemTotal:"     => total_bytes     = val * 1024,
             "MemAvailable:" => available_bytes  = val * 1024,
+            "MemFree:"      => free_bytes       = val * 1024,
+            "Buffers:"      => buffers_bytes    = val * 1024,
             "Cached:"       => cached_bytes     = val * 1024,
             "SwapTotal:"    => swap_total_bytes = val * 1024,
             "SwapFree:"     => swap_free_bytes  = val * 1024,
             _ => {}
         }
     }
-    Ok(MemStat { total_bytes, available_bytes, cached_bytes, swap_total_bytes, swap_free_bytes })
+    Ok(MemStat { total_bytes, available_bytes, free_bytes, buffers_bytes, cached_bytes, swap_total_bytes, swap_free_bytes })
 }
 
 pub struct CoreStat {
@@ -78,6 +82,10 @@ pub struct CoreStat {
 pub struct MemStat {
     pub total_bytes:      u64,
     pub available_bytes:  u64,
+    /// Memory nothing uses at all (from "MemFree:" in /proc/meminfo).
+    pub free_bytes:       u64,
+    /// Block device buffers (from "Buffers:" in /proc/meminfo).
+    pub buffers_bytes:    u64,
     /// Page cache (from "Cached:" in /proc/meminfo).
     pub cached_bytes:     u64,
     pub swap_total_bytes: u64,
